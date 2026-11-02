@@ -51,7 +51,7 @@ class ThemeMeta:
     name: str
     slug: str
     version: str = "0.1.0"
-    author: str = "synthalorian"
+    author: str = "Theme author"
     year: int = 2026
     date: str = ""
     description: str = ""

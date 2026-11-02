@@ -33,7 +33,7 @@ palette2theme [HEX ...] [--palette FILE] --name NAME [--out DIR] [options]
 | `--strict` | Do not adjust anything. Exit with code 3 and list every pair under 4.5:1 |
 | `--force` | Write into an existing non-empty folder. It overwrites only the generated files and leaves other files alone. It refuses, before writing anything, if a generated file or `backgrounds/` is a symlink or not a regular file/folder |
 | `--target omarchy\|plasma` | `plasma` is a **stub** and exits with code 4 (see [Unfinished](#unfinished)) |
-| `--description`, `--author`, `--year`, `--version-string`, `--repo-url` | Metadata for README, CHANGELOG, LICENSE and VERSION. The author defaults to `synthalorian` and the year to 2026. Newlines and other control characters in these and `--name` become spaces, so they cannot break `colors.toml` |
+| `--description`, `--author`, `--year`, `--version-string`, `--repo-url` | Metadata for README, CHANGELOG, LICENSE and VERSION. The author defaults to `$PALETTE2THEME_AUTHOR`, else your `git config user.name`, else `Theme author`; the year defaults to 2026. Newlines and other control characters in these and `--name` become spaces, so they cannot break `colors.toml` |
 | `--brand NAME` | Optional label for the generated file headers ("Omarchy theme by NAME", "(NAME) theme installer"). Default: none, so output is unbranded. `$PALETTE2THEME_BRAND` sets it too |
 | `--date YYYY-MM-DD` | Release date in the theme's CHANGELOG (default: today) |
 | `--wallpaper-size WxH`, `--preview-size WxH` | Defaults `2560x1440` and `1280x720` |
@@ -158,4 +158,4 @@ also reads the older `.glyphsmith-install.manifest`. Its fallback theme is set w
 
 ## License
 
-MIT © 2026 synthalorian. See [LICENSE](LICENSE). Generated themes are MIT too, with the same holder by default.
+MIT © 2026 synthalorian. See [LICENSE](LICENSE). Generated themes are MIT too, with the holder set by `--author` (see above).

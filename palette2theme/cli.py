@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
-import re
 import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -17,6 +18,23 @@ from .palette_io import PaletteError, parse_colors, read_palette_file
 from .plasma import write_plasma_scheme
 
 EXIT_USAGE, EXIT_CONTRAST, EXIT_NOT_IMPLEMENTED = 2, 3, 4
+FALLBACK_AUTHOR = "Theme author"
+
+
+def _git_user_name() -> str:
+    """`git config user.name`, or "" when git is missing, unset, or fails."""
+    try:
+        r = subprocess.run(["git", "config", "--get", "user.name"], capture_output=True,
+                           text=True, timeout=10, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def default_author() -> str:
+    """$PALETTE2THEME_AUTHOR, else `git config user.name`, else a generic placeholder."""
+    return (os.environ.get("PALETTE2THEME_AUTHOR", "").strip() or _git_user_name()
+            or FALLBACK_AUTHOR)
 
 
 def _size(text: str) -> tuple[int, int]:
@@ -53,7 +71,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true", help="overwrite generated files in an existing, non-empty --out")
     p.add_argument("--description", default="", help="one-line description for README and colors.toml")
     p.add_argument("--version-string", dest="theme_version", default="0.1.0", help="theme VERSION (default 0.1.0)")
-    p.add_argument("--author", default="synthalorian", help="copyright holder (default: synthalorian)")
+    p.add_argument("--author", default=None,
+                   help="copyright holder (default: $PALETTE2THEME_AUTHOR, else `git config user.name`, "
+                        f"else '{FALLBACK_AUTHOR}')")
     p.add_argument("--brand", default=os.environ.get("PALETTE2THEME_BRAND", ""),
                    help="optional label for file headers, e.g. 'by <brand>' (default: none, or $PALETTE2THEME_BRAND)")
     p.add_argument("--year", type=int, default=2026, help="copyright year (default: 2026)")
@@ -108,7 +128,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"palette2theme: {e}", file=sys.stderr)
             return EXIT_NOT_IMPLEMENTED
 
-    meta = ThemeMeta(name=args.name, slug=slug, version=args.theme_version, author=args.author,
+    author = args.author if args.author is not None and args.author.strip() else default_author()
+    meta = ThemeMeta(name=args.name, slug=slug, version=args.theme_version, author=author,
                      year=args.year, date=args.date or "", description=args.description,
                      repo_url=args.repo_url, brand=args.brand,
                      source=Path(args.palette).name if args.palette else "",

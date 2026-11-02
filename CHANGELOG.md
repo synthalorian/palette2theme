@@ -6,6 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [0.1.0] - Unreleased
 ### Changed
 - Output is unbranded by default. `--brand NAME` (or `$PALETTE2THEME_BRAND`) adds a label to the file headers.
+- `--author` no longer defaults to a fixed name: it takes `$PALETTE2THEME_AUTHOR`, else `git config user.name`, else `Theme author`.
 - The bundled installer writes `.theme-install.manifest`; uninstall still reads `.glyphsmith-install.manifest`. `$THEME_FALLBACK` replaces `$GLYPHSMITH_FALLBACK_THEME`, which is still accepted.
 - The reference-theme tests read `$PALETTE2THEME_REFERENCE_THEMES` and skip when it is missing. The bundled scripts are no longer compared to `mesa`, as they now differ on purpose.
 ### Added
