@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Mesa (Glyphsmith) theme uninstaller for Omarchy. It reverses install.sh using its manifest. No sudo.
+# Mesa theme uninstaller for Omarchy. It reverses install.sh using its manifest. No sudo.
 # Usage: ./uninstall.sh [--dry-run] [--no-switch] [--fallback <theme>] [-h]
 #   THEME_NAME=<name> overrides the name taken from this folder.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
-DRY_RUN=0 SWITCH=1 FALLBACK=${GLYPHSMITH_FALLBACK_THEME:-tokyo-night}
+DRY_RUN=0 SWITCH=1 FALLBACK=${THEME_FALLBACK:-${GLYPHSMITH_FALLBACK_THEME:-tokyo-night}}   # GLYPHSMITH_FALLBACK_THEME: old name, still accepted
 
 usage() { sed -n '2,4p' "$0" | sed 's/^# \{0,1\}//'; }
 while (( $# )); do
@@ -31,7 +31,10 @@ if ! (LC_ALL=C; [[ $THEME_NAME =~ ^[a-z0-9_][a-z0-9._+-]*$ ]]); then
 fi
 : "${HOME:?HOME must be set}"
 THEME_DIR="$HOME/.config/omarchy/themes/$THEME_NAME"
-MANIFEST="$THEME_DIR/.glyphsmith-install.manifest"
+MANIFEST="$THEME_DIR/.theme-install.manifest"
+# Older installs wrote .glyphsmith-install.manifest; read that one when the new name is absent.
+[[ ! -e $MANIFEST && ! -L $MANIFEST && -e $THEME_DIR/.glyphsmith-install.manifest ]] &&
+  MANIFEST="$THEME_DIR/.glyphsmith-install.manifest"
 # True when no folder from HOME down to $1 (and not $1 itself either) is a symlink. HOME may be one.
 # The resolved theme folder is not trusted as its own boundary: if ~/.config, omarchy or themes is
 # a link, the files behind it live outside HOME, so stop before anything is read or removed.

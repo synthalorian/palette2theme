@@ -1,7 +1,7 @@
 # palette2theme
 
 Turn about six hex colours into a complete, installable **Omarchy 4** theme folder, laid out like
-the hand-made Glyphsmith themes (`steel-and-ember`, `mesa`, …). Contrast checks are built in.
+a hand-made Omarchy 4 theme (originally written for the Glyphsmith themes). Contrast checks are built in.
 
 - Pure Python 3 standard library (3.11+ for TOML palettes). No packages to install.
 - Every text colour reaches **WCAG 2.x AA (4.5:1)** on the surfaces it is drawn on. Colours that
@@ -33,7 +33,8 @@ palette2theme [HEX ...] [--palette FILE] --name NAME [--out DIR] [options]
 | `--strict` | Do not adjust anything. Exit with code 3 and list every pair under 4.5:1 |
 | `--force` | Write into an existing non-empty folder. It overwrites only the generated files and leaves other files alone. It refuses, before writing anything, if a generated file or `backgrounds/` is a symlink or not a regular file/folder |
 | `--target omarchy\|plasma` | `plasma` is a **stub** and exits with code 4 (see [Unfinished](#unfinished)) |
-| `--description`, `--author`, `--year`, `--version-string`, `--repo-url` | Metadata for README, CHANGELOG, LICENSE and VERSION. The author defaults to `synthalorian` and the year to 2026. Newlines and other control characters in these and `--name` become spaces, so they cannot break `colors.toml` |
+| `--description`, `--author`, `--year`, `--version-string`, `--repo-url` | Metadata for README, CHANGELOG, LICENSE and VERSION. The author defaults to `$PALETTE2THEME_AUTHOR`, else your `git config user.name`, else `Theme author`; the year defaults to 2026. Newlines and other control characters in these and `--name` become spaces, so they cannot break `colors.toml` |
+| `--brand NAME` | Optional label for the generated file headers ("Omarchy theme by NAME", "(NAME) theme installer"). Default: none, so output is unbranded. `$PALETTE2THEME_BRAND` sets it too |
 | `--date YYYY-MM-DD` | Release date in the theme's CHANGELOG (default: today) |
 | `--wallpaper-size WxH`, `--preview-size WxH` | Defaults `2560x1440` and `1280x720` |
 | `-q` | Print errors only |
@@ -110,7 +111,7 @@ across hues.
    until it passes. Each change is printed and logged in the theme's CHANGELOG. With `--strict`
    nothing is written.
 6. **Terminal map**: `color0` = background, `1–6` = red, green, yellow, blue, magenta, cyan,
-   `7` = foreground, `8` = muted, `9–14` = brights, `15` = bright foreground. This is the Glyphsmith and Omarchy convention.
+   `7` = foreground, `8` = muted, `9–14` = brights, `15` = bright foreground. This is the usual Omarchy convention.
 7. **Borders**: an accent → second-most-saturated-input gradient at 45°, with a dim surface colour for inactive windows.
 
 ## Tests
@@ -119,13 +120,18 @@ across hues.
 ./run-tests.sh            # = python3 -m unittest discover -s tests -t .
 ```
 
-The suite has 62 tests. It covers colour maths against WCAG reference values, all three palette formats
+The suite has 66 tests. It covers colour maths against WCAG reference values, all three palette formats
 and their errors, role assignment, contrast enforcement, `--strict`, light mode, 150 random fuzzed
 palettes, PNG validity (decoded and CRC-checked), lock-screen contrast for 200 random dark and light palettes,
 `--force` refusing symlinks, metadata sanitising, reproducible output with `--date`, the full CLI and Plasma stub, and a real
-`install.sh` → `uninstall.sh` round trip in a throwaway `$HOME`. If `/workspace/glyphsmith/themes` is
-present, it also checks key-for-key parity with `steel-and-ember` and that the bundled scripts still
-match `mesa`.
+`install.sh` → `uninstall.sh` round trip in a throwaway `$HOME`, unbranded output by default, `--brand`,
+and reading an older `.glyphsmith-install.manifest`. If a folder of reference themes is available
+(`PALETTE2THEME_REFERENCE_THEMES`, default `/workspace/glyphsmith/themes`), it also checks key-for-key
+parity with its `steel-and-ember`; without it those checks are skipped.
+
+The bundled `install.sh` writes `.theme-install.manifest` in the installed theme folder. `uninstall.sh`
+also reads the older `.glyphsmith-install.manifest`. Its fallback theme is set with `--fallback`,
+`$THEME_FALLBACK`, or the older `$GLYPHSMITH_FALLBACK_THEME` (default `tokyo-night`).
 
 ## Layout
 
@@ -152,4 +158,4 @@ match `mesa`.
 
 ## License
 
-MIT © 2026 synthalorian. See [LICENSE](LICENSE). Generated themes are MIT too, with the same holder by default.
+MIT © 2026 synthalorian. See [LICENSE](LICENSE). Generated themes are MIT too, with the holder set by `--author` (see above).

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mesa (Glyphsmith) theme installer for Omarchy (Hyprland). No sudo, user files only.
+# Mesa theme installer for Omarchy (Hyprland). No sudo, user files only.
 # Usage: ./install.sh [--dry-run] [--apply] [--force] [-h]
 #   THEME_NAME=<name> overrides the name taken from this folder.
 set -euo pipefail
@@ -35,7 +35,10 @@ THEMES_DIR="$HOME/.config/omarchy/themes"
 DEST="$THEMES_DIR/$THEME_NAME"
 # Everything install.sh writes stays inside the theme folder, including its manifest.
 # It never backs up or replaces a folder it didn't install, so it needs no state outside $DEST.
-MANIFEST="$DEST/.glyphsmith-install.manifest"
+MANIFEST="$DEST/.theme-install.manifest"
+# Installs made by older versions of this script used this name; treat one as our own manifest.
+[[ ! -e $MANIFEST && -f $DEST/.glyphsmith-install.manifest && ! -L $DEST/.glyphsmith-install.manifest ]] &&
+  MANIFEST="$DEST/.glyphsmith-install.manifest"
 STAMP=$(date +%Y%m%d-%H%M%S)
 
 # Omarchy check
@@ -99,11 +102,14 @@ if [[ -f $MANIFEST ]]; then
       fi
       REACTIVATE=1
     fi
-    log "Existing Glyphsmith install of '$THEME_NAME' found: uninstalling it first (--force)"
+    log "Existing install of '$THEME_NAME' found: uninstalling it first (--force)"
     ua=(); (( DRY_RUN )) && ua+=(--dry-run)
     THEME_NAME=$THEME_NAME bash "$SCRIPT_DIR/uninstall.sh" "${ua[@]}" || die "uninstall failed; nothing changed"
     if (( DRY_RUN )); then
       log "(dry-run: the steps below assume that uninstall ran)"
+    fi
+    MANIFEST="$DEST/.theme-install.manifest"   # the new install always writes the current name
+    if (( DRY_RUN )); then :
     elif [[ -e $DEST || -L $DEST ]]; then
       (( REACTIVATE )) && warn "'$THEME_NAME' was switched away from; switch back with: omarchy-theme-set $THEME_NAME"
       die "$DEST still holds edited or extra files after uninstall (see the warnings above). Move them out, then install again."
@@ -156,7 +162,7 @@ ensure_dir "$DEST"
 for f in "${FILES[@]}"; do ensure_dir "$(dirname -- "$DEST/$f")"; done
 
 write_manifest() {
-  printf '# glyphsmith install manifest v1\n'
+  printf '# theme install manifest v1\n'
   printf 'name\t%s\n' "$THEME_NAME"
   printf 'dest\t%s\n' "$DEST"
   printf 'installed_at\t%s\n' "$STAMP"
