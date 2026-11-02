@@ -1,0 +1,7 @@
+# Light paper-and-ink palette, one hex per line. Comments start with "# ".
+#f2ead8   # paper
+#2b2420   # ink
+#721d18   # oxblood
+#3a6546   # verdigris
+#2e4a7d   # ink blue
+#b0802a   # ochre

@@ -8,6 +8,7 @@ colour-only overrides (btop.theme, shell.lock.toml) that every install method ke
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as _dt
 import os
 import re
@@ -17,13 +18,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import __version__
-from .color import BLACK, WHITE, Color, contrast
+from .color import BLACK, WHITE, Color, contrast, push_to_contrast
 from .derive import MIN_CONTRAST, Scheme
-from .png import render_preview, render_wallpaper, write_png
+from .png import encode_png, render_preview, render_wallpaper
 
 DATA_DIR = Path(__file__).parent / "data"
 NAME_RE = re.compile(r"^[a-z0-9_][a-z0-9._+-]*$")
 SCRIPT_HEADER = "# Mesa (Glyphsmith)"
+# Control characters (newlines included) are not allowed in TOML comments and would end a
+# comment line early, letting metadata inject keys.
+CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]+")
 
 
 class OutputError(RuntimeError):
@@ -55,6 +59,10 @@ class ThemeMeta:
     source: str = ""
     wallpaper_size: tuple[int, int] = (2560, 1440)
     preview_size: tuple[int, int] = (1280, 720)
+
+
+def _one_line(text: str) -> str:
+    return CONTROL_RE.sub(" ", text).strip()
 
 
 # -- file renderers -----------------------------------------------------------
@@ -120,34 +128,44 @@ def render_btop(s: Scheme, meta: ThemeMeta) -> str:
     return "\n".join(out) + "\n"
 
 
-def lock_alphas(s: Scheme) -> tuple[float, float]:
-    """Card opacity and selection opacity for the lock screen.
+LOCK_TEXTS = (("text", "foreground"), ("placeholder", "dark_foreground"), ("text-error", "bright_red"))
+
+
+def lock_palette(s: Scheme) -> tuple[float, float, dict[str, Color]]:
+    """Card opacity, selection opacity and text colours for the lock screen.
 
     The card must keep every lock text colour at MIN_CONTRAST over a pure white *and* a pure
-    black wallpaper; the selection highlight (accent) must keep the text readable on top of it."""
-    card, texts = s["dark_background"], [s["foreground"], s["dark_foreground"], s["bright_red"]]
-    alpha = 1.0
-    for a100 in range(85, 101):
-        a = a100 / 100
-        if all(contrast(t, card.over(w, a)) >= MIN_CONTRAST for t in texts for w in (WHITE, BLACK)):
-            alpha = a
-            break
-    sel = 0.15
-    for s100 in range(45, 14, -1):
-        sa = s100 / 100
-        if all(contrast(s["foreground"], s["accent"].over(card.over(w, alpha), sa)) >= MIN_CONTRAST
-               for w in (WHITE, BLACK)):
-            sel = sa
-            break
-    return alpha, sel
+    black wallpaper; the selection highlight (accent) must keep the text readable on top of it.
+    If no opacity works with the scheme colours (light themes, where the card is darker than the
+    background the text was checked against), the card goes opaque and the failing text colours
+    are moved in lightness, like any other contrast fix."""
+    card = s["dark_background"]
+    texts = {key: s[role] for key, role in LOCK_TEXTS}
+
+    def readable(a: float) -> bool:
+        return all(contrast(t, card.over(w, a)) >= MIN_CONTRAST for t in texts.values() for w in (WHITE, BLACK))
+
+    alpha = next((a100 / 100 for a100 in range(85, 101) if readable(a100 / 100)), None)
+    if alpha is None:
+        alpha = 1.0
+        for key, col in texts.items():
+            fixed = push_to_contrast(col, [card], MIN_CONTRAST, prefer_lighter=s.dark)
+            if fixed is None:  # pragma: no cover - black or white always clears 4.5:1 on a surface shade
+                raise OutputError(f"lock screen {key} cannot reach {MIN_CONTRAST}:1 on {card.hex}")
+            texts[key] = fixed
+    # At 0 the highlight is invisible and the text is on the bare card, which passes above.
+    sel = next((s100 / 100 for s100 in range(45, -1, -1)
+                if all(contrast(texts["text"], s["accent"].over(card.over(w, alpha), s100 / 100)) >= MIN_CONTRAST
+                       for w in (WHITE, BLACK))), 0.0)
+    return alpha, sel, texts
 
 
 def render_shell_lock(s: Scheme) -> str:
-    alpha, sel = lock_alphas(s)
+    alpha, sel, texts = lock_palette(s)
     rows = [
         ("background", f'"{s["dark_background"].hex}"'), ("background-alpha", f"{alpha:g}"),
-        ("text", f'"{s["foreground"].hex}"'), ("placeholder", f'"{s["dark_foreground"].hex}"'),
-        ("text-error", f'"{s["bright_red"].hex}"'), ("border", f'"{s["dark_foreground"].hex}"'),
+        ("text", f'"{texts["text"].hex}"'), ("placeholder", f'"{texts["placeholder"].hex}"'),
+        ("text-error", f'"{texts["text-error"].hex}"'), ("border", f'"{s["dark_foreground"].hex}"'),
         ("border-active", f'"{s["accent"].hex}"'), ("border-error", f'"{s["bright_red"].hex}"'),
         ("border-alpha", "1.0"), ("border-width", "1"),
         ("selection", f'"{s["accent"].hex}"'), ("selection-alpha", f"{sel:g}"),
@@ -318,12 +336,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 def render_license(meta: ThemeMeta) -> str:
     body = (DATA_DIR / "LICENSE").read_text(encoding="utf-8")
-    return re.sub(r"Copyright \(c\) .*", f"Copyright (c) {meta.year} {meta.author}", body, count=1)
+    holder = f"Copyright (c) {meta.year} {meta.author}"
+    # A function replacement, so backslashes in the author are kept literally.
+    return re.sub(r"Copyright \(c\) .*", lambda _: holder, body, count=1)
 
 
 def render_script(which: str, meta: ThemeMeta) -> str:
     body = (DATA_DIR / which).read_text(encoding="utf-8")
-    display = re.sub(r"[\r\n]+", " ", meta.name)
+    display = _one_line(meta.name)
     if SCRIPT_HEADER not in body:  # pragma: no cover - guards a changed upstream script
         raise OutputError(f"unexpected header in bundled {which}")
     return body.replace(SCRIPT_HEADER, f"# {display} (Glyphsmith)", 1)
@@ -341,10 +361,69 @@ def _check_target(out: Path, force: bool) -> None:
             raise OutputError(f"{out} exists and is not empty (pass --force to overwrite the generated files)")
 
 
+def _check_generated_paths(dest: Path, rels: list[str]) -> None:
+    """Refuse before writing anything if a generated path, or a folder on the way to one, is a
+    symlink or not what we would write. Writing through it could land outside the theme."""
+    seen: set[Path] = set()
+    for rel in rels:
+        parts = rel.split("/")
+        for i in range(1, len(parts)):
+            d = dest.joinpath(*parts[:i])
+            if d in seen:
+                continue
+            seen.add(d)
+            if d.is_symlink() or (d.exists() and not d.is_dir()):
+                raise OutputError(f"{d} is a symlink or not a folder; refusing to write through it")
+        p = dest / rel
+        if p.is_symlink() or (p.exists() and not p.is_file()):
+            raise OutputError(f"{p} is a symlink or not a regular file; refusing to overwrite it")
+
+
+def _write(dest: Path, rel: str, data: bytes, mode: int = 0o644) -> None:
+    """Write dest/rel without following a symlink at any step below dest."""
+    *dirs, name = rel.split("/")
+    fd = os.open(dest, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for d in dirs:
+            try:
+                os.mkdir(d, 0o755, dir_fd=fd)
+            except FileExistsError:
+                pass
+            sub = os.open(d, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = sub
+        # Write a fresh temp file and rename it over the entry, so an existing hard link
+        # (or any other file the name points at) is replaced, never written through.
+        tmp = f".{name}.p2t-tmp-{os.getpid()}"
+        try:
+            os.unlink(tmp, dir_fd=fd)
+        except FileNotFoundError:
+            pass
+        f = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=fd)
+        try:
+            with os.fdopen(f, "wb") as fh:
+                os.fchmod(fh.fileno(), mode)
+                fh.write(data)
+            os.replace(tmp, name, src_dir_fd=fd, dst_dir_fd=fd)
+        except BaseException:
+            try:
+                os.unlink(tmp, dir_fd=fd)
+            except OSError:
+                pass
+            raise
+    except OSError as e:
+        raise OutputError(f"cannot write {dest / rel}: {e.strerror}") from e
+    finally:
+        os.close(fd)
+
+
 def generate_files(s: Scheme, meta: ThemeMeta, dest: Path) -> list[str]:
     """Write every theme file into `dest` (which must exist). Returns relative paths written."""
-    if not meta.date:
-        meta.date = _dt.date.today().isoformat()
+    meta = dataclasses.replace(
+        meta, name=_one_line(meta.name), description=_one_line(meta.description),
+        author=_one_line(meta.author), version=_one_line(meta.version),
+        repo_url=_one_line(meta.repo_url), source=_one_line(meta.source),
+        date=meta.date or _dt.date.today().isoformat())
     wallpaper = f"backgrounds/1-{meta.slug}.png"
     icon = pick_icon_theme(s)
     text_files = {
@@ -359,21 +438,19 @@ def generate_files(s: Scheme, meta: ThemeMeta, dest: Path) -> list[str]:
         "install.sh": render_script("install.sh", meta),
         "uninstall.sh": render_script("uninstall.sh", meta),
     }
+    written = sorted(list(text_files) + [wallpaper, "preview.png"])
+    _check_generated_paths(dest, written)
     for rel, text in text_files.items():
-        p = dest / rel
-        p.write_text(text, encoding="utf-8")
-        if rel.endswith(".sh"):
-            p.chmod(0o755)
+        _write(dest, rel, text.encode("utf-8"), 0o755 if rel.endswith(".sh") else 0o644)
 
     c = s.colors
     seed = meta.slug + "".join(x.hex for x in s.inputs)
-    (dest / "backgrounds").mkdir(exist_ok=True)
     w, h = meta.wallpaper_size
-    write_png(dest / wallpaper, w, h, render_wallpaper(
-        w, h, c["darker_background"], c["background"], c["accent"], c["blue"], s.dark, seed))
+    _write(dest, wallpaper, encode_png(w, h, render_wallpaper(
+        w, h, c["darker_background"], c["background"], c["accent"], c["blue"], s.dark, seed)))
     pw, ph = meta.preview_size
-    write_png(dest / "preview.png", pw, ph, render_preview(s, pw, ph, seed))
-    return sorted(list(text_files) + [wallpaper, "preview.png"])
+    _write(dest, "preview.png", encode_png(pw, ph, render_preview(s, pw, ph, seed)))
+    return written
 
 
 def write_theme(s: Scheme, meta: ThemeMeta, out: str | Path, force: bool = False) -> list[str]:

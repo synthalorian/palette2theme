@@ -126,8 +126,8 @@ def _pick_mode(inputs: list[Color], mode: str) -> str:
         return mode
     if mode != "auto":
         raise ValueError(f"mode must be auto, dark or light (got {mode!r})")
-    # A palette whose median colour is light reads as a light theme.
-    return "light" if statistics.median(c.oklch[0] for c in inputs) > 0.72 else "dark"
+    # Palettes conventionally list the background first, so its lightness decides.
+    return "light" if inputs[0].oklch[0] > 0.7 else "dark"
 
 
 def derive_scheme(inputs: list[Color], mode: str = "auto", accent: Color | None = None,
@@ -142,9 +142,10 @@ def derive_scheme(inputs: list[Color], mode: str = "auto", accent: Color | None 
     def label(c: Color) -> str:
         return f"input {inputs.index(c) + 1} ({c.hex})"
 
-    by_l = sorted(inputs, key=lambda c: c.oklch[0])
-    bg_src, fg_src = (by_l[0], by_l[-1]) if dark else (by_l[-1], by_l[0])
-    rest = [c for c in inputs if c not in (bg_src, fg_src)] or [c for c in inputs if c != bg_src]
+    by_l = sorted(range(len(inputs)), key=lambda i: inputs[i].oklch[0])
+    bg_i, fg_i = (by_l[0], by_l[-1]) if dark else (by_l[-1], by_l[0])
+    bg_src, fg_src = inputs[bg_i], inputs[fg_i]
+    rest = [c for i, c in enumerate(inputs) if i not in (bg_i, fg_i)]
 
     # -- surfaces ----------------------------------------------------------------
     L, C, h = bg_src.oklch
@@ -173,12 +174,11 @@ def derive_scheme(inputs: list[Color], mode: str = "auto", accent: Color | None 
 
     # -- chromatic slots -------------------------------------------------------
     chromatic = [c for c in rest if c.oklch[1] >= MIN_CHROMA]
-    if accent is None:
-        pool = chromatic or rest
-        accent = max(pool, key=lambda c: c.oklch[1])
-        roles["accent"] = label(accent)
-    else:
+    if accent is not None:
         roles["accent"] = f"--accent ({accent.hex})"
+    elif chromatic:
+        accent = max(chromatic, key=lambda c: c.oklch[1])
+        roles["accent"] = label(accent)
 
     if chromatic:
         typ_L = statistics.median(c.oklch[0] for c in chromatic)
@@ -205,6 +205,9 @@ def derive_scheme(inputs: list[Color], mode: str = "auto", accent: Color | None 
         if slot not in slots:
             slots[slot] = Color.from_oklch(typ_L, typ_C, hue)
             roles[slot] = "derived"
+    if accent is None:  # no saturated input at all: borrow the synthesised blue
+        accent = slots["blue"]
+        roles["accent"] = "derived (blue)"
     for i, c in enumerate(chromatic):
         if i not in used and c != accent:
             notes.append(f"input {inputs.index(c) + 1} ({c.hex}) matched no free ANSI hue; "

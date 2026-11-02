@@ -1,0 +1,8 @@
+# Cool sea-glass palette (named keys are fine; order is kept)
+[palette]
+deep = "#0f1b24"
+foam = "#d8e6e3"
+kelp = "#5f9e6e"
+reef = "#e07a5f"
+lagoon = "#3d8eb9"
+anemone = "#b56fb0"

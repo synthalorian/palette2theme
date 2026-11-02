@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import re
 import sys
 from pathlib import Path
@@ -22,6 +23,13 @@ def _size(text: str) -> tuple[int, int]:
     if not m or not (1 <= int(m.group(1)) <= 8192 and 1 <= int(m.group(2)) <= 8192):
         raise argparse.ArgumentTypeError("expected WIDTHxHEIGHT, each 1..8192 (e.g. 2560x1440)")
     return int(m.group(1)), int(m.group(2))
+
+
+def _date(text: str) -> str:
+    try:
+        return _dt.date.fromisoformat(text).isoformat()
+    except ValueError:
+        raise argparse.ArgumentTypeError("expected YYYY-MM-DD (e.g. 2026-01-31)") from None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,6 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version-string", dest="theme_version", default="0.1.0", help="theme VERSION (default 0.1.0)")
     p.add_argument("--author", default="synthalorian", help="copyright holder (default: synthalorian)")
     p.add_argument("--year", type=int, default=2026, help="copyright year (default: 2026)")
+    p.add_argument("--date", type=_date, metavar="YYYY-MM-DD",
+                   help="release date for the theme CHANGELOG (default: today)")
     p.add_argument("--repo-url", default="", help="git URL to show in the README install section")
     p.add_argument("--wallpaper-size", type=_size, default=(2560, 1440), metavar="WxH", help="default 2560x1440")
     p.add_argument("--preview-size", type=_size, default=(1280, 720), metavar="WxH", help="default 1280x720")
@@ -71,9 +81,7 @@ def main(argv: list[str] | None = None) -> int:
         if not 4 <= len(colors) <= 8:
             say(f"note: {len(colors)} colours given; palette2theme is tuned for about 6")
         accent = Color.from_hex(args.accent) if args.accent else None
-        slug = args.slug or slugify(args.name)
-        if args.slug:
-            slug = slugify(args.slug)
+        slug = slugify(args.slug or args.name)
         scheme = derive_scheme(colors, mode=args.mode, accent=accent, strict=args.strict)
     except (PaletteError, ColorError, OutputError, ValueError) as e:
         print(f"palette2theme: error: {e}", file=sys.stderr)
@@ -98,7 +106,8 @@ def main(argv: list[str] | None = None) -> int:
             return EXIT_NOT_IMPLEMENTED
 
     meta = ThemeMeta(name=args.name, slug=slug, version=args.theme_version, author=args.author,
-                     year=args.year, description=args.description, repo_url=args.repo_url,
+                     year=args.year, date=args.date or "", description=args.description,
+                     repo_url=args.repo_url,
                      source=Path(args.palette).name if args.palette else "",
                      wallpaper_size=args.wallpaper_size, preview_size=args.preview_size)
     try:
