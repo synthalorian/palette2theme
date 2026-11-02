@@ -252,6 +252,20 @@ class CliTests(unittest.TestCase):
         self.assertEqual(victim.read_text(), "outside")
         self.assertEqual((out / "btop.theme").read_text(), before, "wrote files before refusing")
 
+    def test_force_replaces_hard_link_instead_of_writing_through(self):
+        out = self.build()
+        victim = self.dir / "victim.txt"
+        victim.write_text("outside")
+        victim.chmod(0o600)
+        (out / "colors.toml").unlink()
+        os.link(victim, out / "colors.toml")
+        rc, _, err = run_cli(*EMBER, "--name", "Test Ember", "--out", str(out), "--force", *SMALL)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(victim.read_text(), "outside")
+        self.assertEqual(victim.stat().st_mode & 0o777, 0o600)
+        self.assertNotEqual((out / "colors.toml").read_text(), "outside")
+        self.assertEqual([p.name for p in out.rglob(".*p2t-tmp*")], [])
+
     def test_force_refuses_symlinked_backgrounds(self):
         out = self.build()
         elsewhere = self.dir / "elsewhere"

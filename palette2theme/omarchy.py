@@ -392,10 +392,25 @@ def _write(dest: Path, rel: str, data: bytes, mode: int = 0o644) -> None:
             sub = os.open(d, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
             os.close(fd)
             fd = sub
-        f = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, mode, dir_fd=fd)
-        with os.fdopen(f, "wb") as fh:
-            os.fchmod(fh.fileno(), mode)
-            fh.write(data)
+        # Write a fresh temp file and rename it over the entry, so an existing hard link
+        # (or any other file the name points at) is replaced, never written through.
+        tmp = f".{name}.p2t-tmp-{os.getpid()}"
+        try:
+            os.unlink(tmp, dir_fd=fd)
+        except FileNotFoundError:
+            pass
+        f = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=fd)
+        try:
+            with os.fdopen(f, "wb") as fh:
+                os.fchmod(fh.fileno(), mode)
+                fh.write(data)
+            os.replace(tmp, name, src_dir_fd=fd, dst_dir_fd=fd)
+        except BaseException:
+            try:
+                os.unlink(tmp, dir_fd=fd)
+            except OSError:
+                pass
+            raise
     except OSError as e:
         raise OutputError(f"cannot write {dest / rel}: {e.strerror}") from e
     finally:
