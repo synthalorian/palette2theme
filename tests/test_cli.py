@@ -11,6 +11,7 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
+from palette2theme import __version__
 from palette2theme.cli import EXIT_CONTRAST, EXIT_NOT_IMPLEMENTED, EXIT_USAGE, FALLBACK_AUTHOR, main
 from palette2theme.color import BLACK, WHITE, Color, contrast
 from palette2theme.derive import MIN_CONTRAST, REQUIRED_KEYS, derive_scheme
@@ -433,7 +434,7 @@ class CliTests(unittest.TestCase):
         r = subprocess.run([os.environ.get("PYTHON", "python3"), "-m", "palette2theme", "--version"],
                            cwd=REPO, capture_output=True, text=True, timeout=60)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("palette2theme 0.1.0", r.stdout)
+        self.assertIn(f"palette2theme {__version__}", r.stdout)
 
 
 if __name__ == "__main__":
