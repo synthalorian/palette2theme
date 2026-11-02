@@ -158,7 +158,7 @@ class CliTests(unittest.TestCase):
 
     def test_light_mode(self):
         out = self.dir / "paper"
-        rc, _, err = run_cli("--palette", str(REPO / "examples" / "parchment.txt"), "--mode", "light",
+        rc, _, err = run_cli("--palette", str(REPO / "examples" / "parchment.txt"),
                              "--name", "Paper", "--out", str(out), *SMALL)
         self.assertEqual(rc, 0, err)
         self.assertEqual(tomllib.loads((out / "colors.toml").read_text())["mode"], "light")

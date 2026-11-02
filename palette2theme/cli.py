@@ -71,9 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         if not 4 <= len(colors) <= 8:
             say(f"note: {len(colors)} colours given; palette2theme is tuned for about 6")
         accent = Color.from_hex(args.accent) if args.accent else None
-        slug = args.slug or slugify(args.name)
-        if args.slug:
-            slug = slugify(args.slug)
+        slug = slugify(args.slug or args.name)
         scheme = derive_scheme(colors, mode=args.mode, accent=accent, strict=args.strict)
     except (PaletteError, ColorError, OutputError, ValueError) as e:
         print(f"palette2theme: error: {e}", file=sys.stderr)

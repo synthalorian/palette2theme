@@ -60,6 +60,9 @@ class DeriveTests(unittest.TestCase):
 
     def test_mode_auto_and_light(self):
         self.assertEqual(derive_scheme(pal("#fafafa", "#f0e0d0", "#e8f0ff", "#202020", "#ffd0d0")).mode, "light")
+        # The first colour decides, even when most of the palette is dark ink.
+        self.assertEqual(derive_scheme(PAPER).mode, "light")
+        self.assertEqual(derive_scheme(EMBER).mode, "dark")
         s = derive_scheme(PAPER, mode="light")
         self.assertEqual(s.mode, "light")
         self.assertGreater(s["background"].luminance, s["foreground"].luminance)

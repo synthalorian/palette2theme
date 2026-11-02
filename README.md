@@ -27,7 +27,7 @@ palette2theme [HEX ...] [--palette FILE] --name NAME [--out DIR] [options]
 | `--name NAME` | Display name, e.g. `'Steel & Ember'`. The folder name (slug) comes from it: `steel-and-ember` |
 | `--slug SLUG` | Override the folder name. It must match Omarchy's `^[a-z0-9_][a-z0-9._+-]*$` |
 | `--out DIR` | Theme folder to create (default `./<slug>`). It must be missing or empty unless `--force` is given |
-| `--mode auto\|dark\|light` | `auto` (the default) picks light when the median input colour is light |
+| `--mode auto\|dark\|light` | `auto` (the default) picks light when the **first** colour is light (palettes usually list the background first) |
 | `--accent HEX` | Use this accent instead of the most saturated input |
 | `--strict` | Do not adjust anything. Exit with code 3 and list every pair under 4.5:1 |
 | `--force` | Write into an existing non-empty folder. It overwrites only the generated files and leaves other files alone |

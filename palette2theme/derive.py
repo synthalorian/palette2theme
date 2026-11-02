@@ -126,8 +126,8 @@ def _pick_mode(inputs: list[Color], mode: str) -> str:
         return mode
     if mode != "auto":
         raise ValueError(f"mode must be auto, dark or light (got {mode!r})")
-    # A palette whose median colour is light reads as a light theme.
-    return "light" if statistics.median(c.oklch[0] for c in inputs) > 0.72 else "dark"
+    # Palettes conventionally list the background first, so its lightness decides.
+    return "light" if inputs[0].oklch[0] > 0.7 else "dark"
 
 
 def derive_scheme(inputs: list[Color], mode: str = "auto", accent: Color | None = None,
