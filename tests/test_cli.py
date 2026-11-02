@@ -1,6 +1,8 @@
 import contextlib
+import datetime
 import io
 import os
+import random
 import shutil
 import subprocess
 import tempfile
@@ -9,11 +11,13 @@ import unittest
 from pathlib import Path
 
 from palette2theme.cli import EXIT_CONTRAST, EXIT_NOT_IMPLEMENTED, EXIT_USAGE, main
-from palette2theme.color import Color, contrast
-from palette2theme.derive import MIN_CONTRAST, REQUIRED_KEYS
-from palette2theme.omarchy import DATA_DIR, OutputError, slugify
+from palette2theme.color import BLACK, WHITE, Color, contrast
+from palette2theme.derive import MIN_CONTRAST, REQUIRED_KEYS, derive_scheme
+from palette2theme.omarchy import DATA_DIR, OutputError, render_shell_lock, slugify
 from tests.helpers import REPO, decode_png
 
+# Light palette whose placeholder (dark_foreground) is only 4.40:1 on the opaque lock card.
+LOCK_LIGHT = ["#e58e03", "#51d8ae", "#8e4f6e", "#ac342f", "#c231b7", "#b08716"]
 EMBER = ["#191d22", "#d4cfc8", "#f28c38", "#fb5668", "#7f9fc0", "#afcd8b"]
 SMALL = ["--wallpaper-size", "64x36", "--preview-size", "64x36"]
 REFERENCE = Path("/workspace/glyphsmith/themes")
@@ -100,6 +104,32 @@ class CliTests(unittest.TestCase):
             comp = card.over(wall, lock["background-alpha"])
             for key in ("text", "placeholder", "text-error"):
                 self.assertGreaterEqual(contrast(Color.from_hex(lock[key]), comp), MIN_CONTRAST, key)
+
+    def assert_lock_readable(self, lock_text):
+        lock = tomllib.loads(lock_text)
+        card = Color.from_hex(lock["background"])
+        accent = Color.from_hex(lock["selection"])
+        text = Color.from_hex(lock["text"])
+        for wall in (WHITE, BLACK):
+            comp = card.over(wall, lock["background-alpha"])
+            for key in ("text", "placeholder", "text-error"):
+                self.assertGreaterEqual(contrast(Color.from_hex(lock[key]), comp), MIN_CONTRAST, key)
+            self.assertGreaterEqual(contrast(text, accent.over(comp, lock["selection-alpha"])), MIN_CONTRAST,
+                                    "text on selection")
+
+    def test_lock_screen_light_theme_fallback(self):
+        out = self.build(colors=LOCK_LIGHT, name="Lock Light")
+        self.assertEqual(tomllib.loads((out / "colors.toml").read_text())["mode"], "light")
+        self.assert_lock_readable((out / "shell.lock.toml").read_text())
+
+    def test_lock_screen_fuzz_both_modes(self):
+        rng = random.Random(4321)
+        for i in range(200):
+            colors = [Color(rng.randrange(256), rng.randrange(256), rng.randrange(256))
+                      for _ in range(rng.randint(2, 9))]
+            mode = ("dark", "light")[i % 2]
+            with self.subTest(i=i, colors=[c.hex for c in colors], mode=mode):
+                self.assert_lock_readable(render_shell_lock(derive_scheme(colors, mode=mode)))
 
     def test_pngs_valid(self):
         out = self.build()
@@ -208,6 +238,64 @@ class CliTests(unittest.TestCase):
         rc, _, err = run_cli(*EMBER, "--name", "L", "--out", str(link), *SMALL)
         self.assertEqual(rc, EXIT_USAGE)
         self.assertIn("symlink", err)
+
+    def test_force_refuses_symlinked_generated_file(self):
+        out = self.build()
+        victim = self.dir / "victim.txt"
+        victim.write_text("outside")
+        (out / "colors.toml").unlink()
+        (out / "colors.toml").symlink_to(victim)
+        before = (out / "btop.theme").read_text()
+        rc, _, err = run_cli(*EMBER, "--name", "Test Ember", "--out", str(out), "--force", "--accent", "#7f9fc0", *SMALL)
+        self.assertEqual(rc, EXIT_USAGE)
+        self.assertIn("symlink", err)
+        self.assertEqual(victim.read_text(), "outside")
+        self.assertEqual((out / "btop.theme").read_text(), before, "wrote files before refusing")
+
+    def test_force_refuses_symlinked_backgrounds(self):
+        out = self.build()
+        elsewhere = self.dir / "elsewhere"
+        elsewhere.mkdir()
+        shutil.rmtree(out / "backgrounds")
+        (out / "backgrounds").symlink_to(elsewhere)
+        rc, _, err = run_cli(*EMBER, "--name", "Test Ember", "--out", str(out), "--force", *SMALL)
+        self.assertEqual(rc, EXIT_USAGE)
+        self.assertIn("symlink", err)
+        self.assertEqual(list(elsewhere.iterdir()), [])
+
+    def test_multiline_metadata_stays_in_comments(self):
+        out = self.build("--description", 'first\nmode = "light"\r\naccent = "#000000"',
+                         name='Two\nmode = "light"')
+        text = (out / "colors.toml").read_text()
+        data = tomllib.loads(text)
+        self.assertEqual(data["mode"], "dark")
+        self.assertEqual([l for l in text.splitlines() if l.startswith("mode")], ['mode = "dark"'])
+        self.assertNotEqual(data["accent"], "#000000")
+        self.assertIn('# first mode = "light" accent = "#000000"', text)
+        self.assertEqual((out / "README.md").read_text().splitlines()[0], '# Two mode = "light"')
+        self.assertNotIn("\nmode", (out / "btop.theme").read_text())
+
+    def test_author_is_literal_in_license(self):
+        for author in ("ACME\\q", r"Bob \1 \g<0> \\ Ltd"):
+            with self.subTest(author=author):
+                out = self.build("--author", author, "--force", name="Lic")
+                self.assertIn(f"Copyright (c) 2026 {author}\n", (out / "LICENSE").read_text())
+
+    def test_output_is_reproducible_with_date(self):
+        a = self.build("--date", "2026-03-04", name="Same")
+        b = self.dir / "copy"
+        rc, _, err = run_cli(*EMBER, "--name", "Same", "--out", str(b), "--date", "2026-03-04", *SMALL)
+        self.assertEqual(rc, 0, err)
+        files = sorted(str(p.relative_to(a)) for p in a.rglob("*") if p.is_file())
+        self.assertEqual(files, sorted(str(p.relative_to(b)) for p in b.rglob("*") if p.is_file()))
+        for f in files:
+            self.assertEqual((a / f).read_bytes(), (b / f).read_bytes(), f)
+        self.assertIn("## [0.1.0] - 2026-03-04", (a / "CHANGELOG.md").read_text())
+        today = self.build(name="Today")
+        self.assertIn(f"- {datetime.date.today().isoformat()}\n", (today / "CHANGELOG.md").read_text())
+        rc, _, err = run_cli(*EMBER, "--name", "X", "--date", "2026-13-01")
+        self.assertEqual(rc, EXIT_USAGE)
+        self.assertIn("YYYY-MM-DD", err)
 
     def test_usage_errors(self):
         cases = [

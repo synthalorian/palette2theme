@@ -6,7 +6,8 @@ the hand-made Glyphsmith themes (`steel-and-ember`, `mesa`, …). Contrast check
 - Pure Python 3 standard library (3.11+ for TOML palettes). No packages to install.
 - Every text colour reaches **WCAG 2.x AA (4.5:1)** on the surfaces it is drawn on. Colours that
   miss it are moved in lightness, keeping their hue, or the run fails with `--strict`.
-- Output is deterministic: the same palette and name always give the same files.
+- Output is deterministic apart from the release date in the theme's CHANGELOG, which defaults to
+  today. Pass `--date YYYY-MM-DD` and the same palette and options give byte-identical files.
 
 ```bash
 bin/palette2theme '#191d22' '#d4cfc8' '#f28c38' '#fb5668' '#7f9fc0' '#afcd8b' \
@@ -30,9 +31,10 @@ palette2theme [HEX ...] [--palette FILE] --name NAME [--out DIR] [options]
 | `--mode auto\|dark\|light` | `auto` (the default) picks light when the **first** colour is light (palettes usually list the background first) |
 | `--accent HEX` | Use this accent instead of the most saturated input |
 | `--strict` | Do not adjust anything. Exit with code 3 and list every pair under 4.5:1 |
-| `--force` | Write into an existing non-empty folder. It overwrites only the generated files and leaves other files alone |
+| `--force` | Write into an existing non-empty folder. It overwrites only the generated files and leaves other files alone. It refuses, before writing anything, if a generated file or `backgrounds/` is a symlink or not a regular file/folder |
 | `--target omarchy\|plasma` | `plasma` is a **stub** and exits with code 4 (see [Unfinished](#unfinished)) |
-| `--description`, `--author`, `--year`, `--version-string`, `--repo-url` | Metadata for README, CHANGELOG, LICENSE and VERSION. The author defaults to `synthalorian` and the year to 2026 |
+| `--description`, `--author`, `--year`, `--version-string`, `--repo-url` | Metadata for README, CHANGELOG, LICENSE and VERSION. The author defaults to `synthalorian` and the year to 2026. Newlines and other control characters in these and `--name` become spaces, so they cannot break `colors.toml` |
+| `--date YYYY-MM-DD` | Release date in the theme's CHANGELOG (default: today) |
 | `--wallpaper-size WxH`, `--preview-size WxH` | Defaults `2560x1440` and `1280x720` |
 | `-q` | Print errors only |
 
@@ -72,6 +74,7 @@ JSON can also be a bare list, or an object with `palette`. See [`examples/`](exa
 ├── btop.theme           # colour-only btop override
 ├── icons.theme          # nearest Yaru accent variant (Yaru-red, Yaru-blue, Yaru-sage, …)
 ├── shell.lock.toml      # lock screen; card and selection opacity computed for 4.5:1 over any wallpaper
+│                        # (if no opacity works, the card goes opaque and the lock text colours are moved in lightness)
 ├── backgrounds/1-<slug>.png   # palette-tinted gradient + glow + grain, written by a stdlib PNG encoder
 ├── preview.png          # mock window: bar, text lines, selection, the 16 ANSI swatches
 ├── VERSION  README.md  CHANGELOG.md  LICENSE (MIT)
@@ -116,9 +119,10 @@ across hues.
 ./run-tests.sh            # = python3 -m unittest discover -s tests -t .
 ```
 
-The suite has 55 tests. It covers colour maths against WCAG reference values, all three palette formats
+The suite has 62 tests. It covers colour maths against WCAG reference values, all three palette formats
 and their errors, role assignment, contrast enforcement, `--strict`, light mode, 150 random fuzzed
-palettes, PNG validity (decoded and CRC-checked), the full CLI and Plasma stub, and a real
+palettes, PNG validity (decoded and CRC-checked), lock-screen contrast for 200 random dark and light palettes,
+`--force` refusing symlinks, metadata sanitising, reproducible output with `--date`, the full CLI and Plasma stub, and a real
 `install.sh` → `uninstall.sh` round trip in a throwaway `$HOME`. If `/workspace/glyphsmith/themes` is
 present, it also checks key-for-key parity with `steel-and-ember` and that the bundled scripts still
 match `mesa`.
