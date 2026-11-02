@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Run palette2theme from a checkout without installing it.
+set -euo pipefail
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m palette2theme "$@"
