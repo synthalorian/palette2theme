@@ -37,7 +37,7 @@ SLOT_HUES = {
     "magenta": 330.0,
 }
 
-# Keys every Glyphsmith Omarchy 4 colors.toml carries (besides `mode`), in file order.
+# Keys every hand-made Omarchy 4 colors.toml carries (besides `mode`), in file order.
 COLOR_KEYS = [
     "accent", "selection", "muted",
     "background", "dark_background", "darker_background", "lighter_background",

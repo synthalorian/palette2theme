@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import re
+import os
 import sys
 from pathlib import Path
 
@@ -53,6 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--description", default="", help="one-line description for README and colors.toml")
     p.add_argument("--version-string", dest="theme_version", default="0.1.0", help="theme VERSION (default 0.1.0)")
     p.add_argument("--author", default="synthalorian", help="copyright holder (default: synthalorian)")
+    p.add_argument("--brand", default=os.environ.get("PALETTE2THEME_BRAND", ""),
+                   help="optional label for file headers, e.g. 'by <brand>' (default: none, or $PALETTE2THEME_BRAND)")
     p.add_argument("--year", type=int, default=2026, help="copyright year (default: 2026)")
     p.add_argument("--date", type=_date, metavar="YYYY-MM-DD",
                    help="release date for the theme CHANGELOG (default: today)")
@@ -107,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
 
     meta = ThemeMeta(name=args.name, slug=slug, version=args.theme_version, author=args.author,
                      year=args.year, date=args.date or "", description=args.description,
-                     repo_url=args.repo_url,
+                     repo_url=args.repo_url, brand=args.brand,
                      source=Path(args.palette).name if args.palette else "",
                      wallpaper_size=args.wallpaper_size, preview_size=args.preview_size)
     try:
